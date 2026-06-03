@@ -3,7 +3,7 @@ import { IsString, MinLength } from 'class-validator';
 export class LoginRequestOtpDto {
   @IsString()
   @MinLength(3)
-  identifier: string;
+  username: string;
 
   @IsString()
   password: string;

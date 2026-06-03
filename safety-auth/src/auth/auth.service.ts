@@ -52,21 +52,18 @@ export class AuthService {
     };
   }
 
-  async verifyOtp(verifyOtpDto: VerifyOtpDto): Promise<{ message: string; email: string }> {
+  async verifyOtp(verifyOtpDto: VerifyOtpDto): Promise<AccessTokenResponse> {
     const email = this.usersService.normalizeEmail(verifyOtpDto.email);
 
     await this.otpService.verifyRegisterOtp(email, verifyOtpDto.otp);
     const user = await this.usersService.markEmailVerified(email);
 
-    return {
-      message: 'Email verified successfully',
-      email: user.email,
-    };
+    return this.createAccessTokenResponse(user);
   }
 
   async requestLoginOtp(loginRequestOtpDto: LoginRequestOtpDto): Promise<{ message: string; username: string | null; email: string }> {
     const user = await this.validateUserCredentials(
-      loginRequestOtpDto.identifier,
+      loginRequestOtpDto.username,
       loginRequestOtpDto.password,
     );
     const otp = await this.otpService.createLoginOtp(user.email);
@@ -81,7 +78,7 @@ export class AuthService {
   }
 
   async verifyLoginOtp(loginVerifyOtpDto: LoginVerifyOtpDto): Promise<AccessTokenResponse> {
-    const user = await this.findUserByIdentifierOrThrow(loginVerifyOtpDto.identifier);
+    const user = await this.findUserByIdentifierOrThrow(loginVerifyOtpDto.username);
 
     await this.otpService.verifyLoginOtp(user.email, loginVerifyOtpDto.otp);
 
@@ -102,7 +99,7 @@ export class AuthService {
     const user = await this.findUserByIdentifierOrThrow(identifier);
 
     if (!(await this.verifyPassword(password, user.passwordHash))) {
-      throw new UnauthorizedException('Invalid identifier or password');
+      throw new UnauthorizedException('Invalid username or password');
     }
 
     if (!user.isEmailVerified) {
@@ -116,7 +113,7 @@ export class AuthService {
     const user = await this.usersService.findByIdentifier(identifier);
 
     if (!user) {
-      throw new UnauthorizedException('Invalid identifier or password');
+      throw new UnauthorizedException('Invalid username or password');
     }
 
     return user;

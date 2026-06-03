@@ -1,0 +1,244 @@
+:root {
+  color: #202124;
+  background: #f7f9fc;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+.pageShell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(247, 249, 252, 0.95)),
+    radial-gradient(circle at top left, rgba(13, 148, 136, 0.12), transparent 38%),
+    radial-gradient(circle at bottom right, rgba(37, 99, 235, 0.1), transparent 34%);
+}
+
+.authCard {
+  width: min(100%, 448px);
+  padding: 34px;
+  border: 1px solid #dfe5ee;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 20px 52px rgba(30, 41, 59, 0.12);
+}
+
+.brandMark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #0f766e;
+  font-weight: 750;
+  font-size: 1.18rem;
+  margin-bottom: 30px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #5f6368;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+h1 {
+  margin: 0;
+  color: #111827;
+  font-size: 2rem;
+  line-height: 1.15;
+  font-weight: 720;
+  letter-spacing: 0;
+}
+
+.subtitle {
+  margin: 12px 0 28px;
+  color: #5f6368;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.formStack {
+  display: grid;
+  gap: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 7px;
+  color: #3c4043;
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.inputWrap {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid #ccd6e0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #64748b;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.inputWrap:focus-within {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+}
+
+.inputWrap input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #111827;
+  background: transparent;
+  font-size: 1rem;
+}
+
+.inputWrap input::placeholder {
+  color: #94a3b8;
+}
+
+.primaryButton,
+.secondaryButton {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 8px;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-weight: 720;
+  transition: transform 140ms ease, background 140ms ease, opacity 140ms ease;
+}
+
+.primaryButton {
+  margin-top: 4px;
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.primaryButton:hover:not(:disabled),
+.secondaryButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.primaryButton:disabled {
+  opacity: 0.55;
+}
+
+.secondaryButton {
+  margin-top: 20px;
+  color: #0f172a;
+  background: #e9eef5;
+}
+
+.message {
+  border-radius: 8px;
+  padding: 12px 13px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.message.error {
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.message.success {
+  color: #166534;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.asideLink {
+  margin-top: 26px;
+  color: #5f6368;
+  font-size: 0.94rem;
+  text-align: center;
+}
+
+.asideLink button {
+  border: 0;
+  padding: 0;
+  color: #0f766e;
+  background: transparent;
+  font-weight: 720;
+}
+
+.successPanel {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 14px;
+  align-items: start;
+  padding: 16px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.successPanel strong {
+  display: block;
+  color: #14532d;
+  margin-bottom: 4px;
+}
+
+.successPanel p {
+  margin: 0;
+  color: #166534;
+  line-height: 1.45;
+}
+
+@media (max-width: 520px) {
+  .pageShell {
+    align-items: stretch;
+    padding: 16px;
+  }
+
+  .authCard {
+    align-self: center;
+    padding: 24px 20px;
+  }
+
+  h1 {
+    font-size: 1.62rem;
+  }
+
+  .subtitle {
+    font-size: 0.96rem;
+  }
+}
