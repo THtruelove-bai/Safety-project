@@ -10,7 +10,7 @@ export class UsersService {
     private readonly usersRepository: Repository<User>,
   ) {}
 
-  async create(username: string, email: string, passwordHash: string): Promise<User> {
+  async create(username: string, email: string, passwordHash: string, isEmailVerified = false): Promise<User> {
     const normalizedUsername = this.normalizeUsername(username);
     const normalizedEmail = this.normalizeEmail(email);
     const existingEmail = await this.findByEmail(normalizedEmail);
@@ -29,10 +29,14 @@ export class UsersService {
       username: normalizedUsername,
       email: normalizedEmail,
       passwordHash,
-      isEmailVerified: false,
+      isEmailVerified,
     });
 
     return this.usersRepository.save(user);
+  }
+
+  createVerified(username: string, email: string, passwordHash: string): Promise<User> {
+    return this.create(username, email, passwordHash, true);
   }
 
   async findByEmail(email: string): Promise<User | null> {

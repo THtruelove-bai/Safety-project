@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'crypto';
 import jwt from 'jsonwebtoken';
@@ -35,20 +35,33 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  async register(registerDto: RegisterDto): Promise<{ message: string; userId: string; username: string | null; email: string }> {
+  async register(registerDto: RegisterDto): Promise<{ message: string; username: string; email: string }> {
     const username = this.usersService.normalizeUsername(registerDto.username);
     const email = this.usersService.normalizeEmail(registerDto.email);
+
+    await this.assertRegistrationAvailable(username, email);
+
     const passwordHash = await this.hashPassword(registerDto.password);
-    const user = await this.usersService.create(username, email, passwordHash);
     const otp = await this.otpService.createRegisterOtp(email);
 
-    await this.mailService.sendOtpEmail(email, otp);
+    await this.otpService.savePendingRegistration({
+      username,
+      email,
+      passwordHash,
+    });
+
+    try {
+      await this.mailService.sendOtpEmail(email, otp);
+    } catch {
+      await this.otpService.deletePendingRegistration(email);
+      await this.otpService.deleteRegisterOtp(email);
+      throw new BadRequestException('Could not send verification email. Please try again later.');
+    }
 
     return {
-      message: 'Registration successful. Please verify your email with the OTP sent to your inbox.',
-      userId: user.id,
-      username: user.username,
-      email: user.email,
+      message: 'Registration OTP sent. Please verify your email to finish creating your Safety account.',
+      username,
+      email,
     };
   }
 
@@ -56,7 +69,22 @@ export class AuthService {
     const email = this.usersService.normalizeEmail(verifyOtpDto.email);
 
     await this.otpService.verifyRegisterOtp(email, verifyOtpDto.otp);
-    const user = await this.usersService.markEmailVerified(email);
+
+    const pendingRegistration = await this.otpService.getPendingRegistration(email);
+
+    if (!pendingRegistration) {
+      throw new BadRequestException('Registration expired. Please register again.');
+    }
+
+    await this.assertRegistrationAvailable(pendingRegistration.username, pendingRegistration.email);
+
+    const user = await this.usersService.createVerified(
+      pendingRegistration.username,
+      pendingRegistration.email,
+      pendingRegistration.passwordHash,
+    );
+
+    await this.otpService.deletePendingRegistration(email);
 
     return this.createAccessTokenResponse(user);
   }
@@ -93,6 +121,28 @@ export class AuthService {
       tokenType: 'Bearer',
       expiresIn: this.configService.get<string>('JWT_EXPIRES_IN', '1d'),
     };
+  }
+
+  private async assertRegistrationAvailable(username: string, email: string): Promise<void> {
+    const existingEmail = await this.usersService.findByEmail(email);
+
+    if (existingEmail) {
+      if (existingEmail.isEmailVerified) {
+        throw new ConflictException('Email is already registered');
+      }
+
+      throw new ConflictException('Email has an unverified registration from the previous flow. Remove it in development or use a different email.');
+    }
+
+    const existingUsername = await this.usersService.findByUsername(username);
+
+    if (existingUsername) {
+      if (existingUsername.isEmailVerified) {
+        throw new ConflictException('Username is already registered');
+      }
+
+      throw new ConflictException('Username has an unverified registration from the previous flow. Remove it in development or use a different username.');
+    }
   }
 
   private async validateUserCredentials(identifier: string, password: string): Promise<User> {

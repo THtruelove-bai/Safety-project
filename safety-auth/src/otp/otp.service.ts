@@ -5,6 +5,12 @@ import { createClient, RedisClientType } from 'redis';
 
 type OtpPurpose = 'register' | 'login';
 
+export type PendingRegistration = {
+  username: string;
+  email: string;
+  passwordHash: string;
+};
+
 @Injectable()
 export class OtpService implements OnModuleInit, OnModuleDestroy {
   private client: RedisClientType;
@@ -41,12 +47,40 @@ export class OtpService implements OnModuleInit, OnModuleDestroy {
     return this.verifyOtp(email, otp, 'register');
   }
 
+  async deleteRegisterOtp(email: string): Promise<void> {
+    await this.client.del(this.getOtpKey(email, 'register'));
+  }
+
   createLoginOtp(email: string): Promise<string> {
     return this.createOtp(email, 'login');
   }
 
   verifyLoginOtp(email: string, otp: string): Promise<void> {
     return this.verifyOtp(email, otp, 'login');
+  }
+
+  async savePendingRegistration(pendingRegistration: PendingRegistration): Promise<void> {
+    const ttlSeconds = this.getOtpTtlSeconds();
+
+    await this.client.set(
+      this.getPendingRegistrationKey(pendingRegistration.email),
+      JSON.stringify(pendingRegistration),
+      { EX: ttlSeconds },
+    );
+  }
+
+  async getPendingRegistration(email: string): Promise<PendingRegistration | null> {
+    const value = await this.client.get(this.getPendingRegistrationKey(email));
+
+    if (!value) {
+      return null;
+    }
+
+    return JSON.parse(value) as PendingRegistration;
+  }
+
+  async deletePendingRegistration(email: string): Promise<void> {
+    await this.client.del(this.getPendingRegistrationKey(email));
   }
 
   createEmailOtp(email: string): Promise<string> {
@@ -59,10 +93,9 @@ export class OtpService implements OnModuleInit, OnModuleDestroy {
 
   private async createOtp(email: string, purpose: OtpPurpose): Promise<string> {
     const otp = randomInt(0, 1_000_000).toString().padStart(6, '0');
-    const ttlSeconds = Number(this.configService.get<string>('OTP_TTL_SECONDS', '300'));
 
     await this.client.set(this.getOtpKey(email, purpose), this.hashOtp(email, otp, purpose), {
-      EX: ttlSeconds,
+      EX: this.getOtpTtlSeconds(),
     });
 
     return otp;
@@ -83,8 +116,16 @@ export class OtpService implements OnModuleInit, OnModuleDestroy {
     await this.client.del(key);
   }
 
+  private getOtpTtlSeconds(): number {
+    return Number(this.configService.get<string>('OTP_TTL_SECONDS', '300'));
+  }
+
   private getOtpKey(email: string, purpose: OtpPurpose): string {
     return `otp:${purpose}:${email.trim().toLowerCase()}`;
+  }
+
+  private getPendingRegistrationKey(email: string): string {
+    return `pending:register:${email.trim().toLowerCase()}`;
   }
 
   private hashOtp(email: string, otp: string, purpose: OtpPurpose): string {
