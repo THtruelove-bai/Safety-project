@@ -1,0 +1,47 @@
+<!-- Safety Auth authentication audit decoders. -->
+<!-- Raw Safety Auth JSON, useful for wazuh-logtest and non-Docker ingestion paths. -->
+<decoder name="safety-auth-json">
+  <prematch>"source":"safety-auth"</prematch>
+  <plugin_decoder>JSON_Decoder</plugin_decoder>
+</decoder>
+
+<!-- Docker json-file fallback. These lines contain the Safety Auth JSON escaped inside Docker's log field. -->
+<decoder name="safety-auth-docker-json">
+  <prematch>source</prematch>
+</decoder>
+
+<decoder name="safety-auth-docker-json-fields">
+  <parent>safety-auth-docker-json</parent>
+  <regex>source..:..([A-Za-z0-9_.-]+).*category..:..([A-Za-z0-9_.-]+).*event..:..([A-Za-z0-9_.-]+).*status..:..([A-Za-z0-9_.-]+).*severity..:..([A-Za-z0-9_.-]+)</regex>
+  <order>source,category,event,status,severity</order>
+</decoder>
+
+<decoder name="safety-auth-docker-json-username">
+  <parent>safety-auth-docker-json</parent>
+  <regex>username..:..([A-Za-z0-9_.@-]+)</regex>
+  <order>username</order>
+</decoder>
+
+<decoder name="safety-auth-docker-json-email">
+  <parent>safety-auth-docker-json</parent>
+  <regex>email..:..([A-Za-z0-9_.@-]+)</regex>
+  <order>email</order>
+</decoder>
+
+<decoder name="safety-auth-docker-json-ip">
+  <parent>safety-auth-docker-json</parent>
+  <regex>ip..:..([A-Za-z0-9_.:-]+)</regex>
+  <order>ip</order>
+</decoder>
+
+<decoder name="safety-auth-docker-json-user-agent">
+  <parent>safety-auth-docker-json</parent>
+  <regex>userAgent..:..([A-Za-z0-9_./:-]+)</regex>
+  <order>userAgent</order>
+</decoder>
+
+<decoder name="safety-auth-docker-json-reason">
+  <parent>safety-auth-docker-json</parent>
+  <regex>reason..:..([A-Za-z0-9_.-]+)</regex>
+  <order>reason</order>
+</decoder>

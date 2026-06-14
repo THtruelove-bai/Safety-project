@@ -1,7 +1,12 @@
-import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'crypto';
-import jwt from 'jsonwebtoken';
+import jwt, { type SignOptions } from 'jsonwebtoken';
 import { promisify } from 'util';
 import { MailService } from '../mail/mail.service';
 import { OtpService } from '../otp/otp.service';
@@ -12,6 +17,7 @@ import { LoginVerifyOtpDto } from './dto/login-verify-otp.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { ResendOtpDto } from './dto/resend-otp.dto';
 
 const scrypt = promisify(scryptCallback);
 
@@ -35,7 +41,9 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  async register(registerDto: RegisterDto): Promise<{ message: string; username: string; email: string }> {
+  async register(
+    registerDto: RegisterDto,
+  ): Promise<{ message: string; username: string; email: string }> {
     const username = this.usersService.normalizeUsername(registerDto.username);
     const email = this.usersService.normalizeEmail(registerDto.email);
 
@@ -55,11 +63,14 @@ export class AuthService {
     } catch {
       await this.otpService.deletePendingRegistration(email);
       await this.otpService.deleteRegisterOtp(email);
-      throw new BadRequestException('Could not send verification email. Please try again later.');
+      throw new BadRequestException(
+        'Could not send verification email. Please try again later.',
+      );
     }
 
     return {
-      message: 'Registration OTP sent. Please verify your email to finish creating your Safety account.',
+      message:
+        'Registration OTP sent. Please verify your email to finish creating your Safety account.',
       username,
       email,
     };
@@ -70,13 +81,19 @@ export class AuthService {
 
     await this.otpService.verifyRegisterOtp(email, verifyOtpDto.otp);
 
-    const pendingRegistration = await this.otpService.getPendingRegistration(email);
+    const pendingRegistration =
+      await this.otpService.getPendingRegistration(email);
 
     if (!pendingRegistration) {
-      throw new BadRequestException('Registration expired. Please register again.');
+      throw new BadRequestException(
+        'Registration expired. Please register again.',
+      );
     }
 
-    await this.assertRegistrationAvailable(pendingRegistration.username, pendingRegistration.email);
+    await this.assertRegistrationAvailable(
+      pendingRegistration.username,
+      pendingRegistration.email,
+    );
 
     const user = await this.usersService.createVerified(
       pendingRegistration.username,
@@ -89,7 +106,9 @@ export class AuthService {
     return this.createAccessTokenResponse(user);
   }
 
-  async requestLoginOtp(loginRequestOtpDto: LoginRequestOtpDto): Promise<{ message: string; username: string | null; email: string }> {
+  async requestLoginOtp(
+    loginRequestOtpDto: LoginRequestOtpDto,
+  ): Promise<{ message: string; username: string | null; email: string }> {
     const user = await this.validateUserCredentials(
       loginRequestOtpDto.username,
       loginRequestOtpDto.password,
@@ -105,16 +124,86 @@ export class AuthService {
     };
   }
 
-  async verifyLoginOtp(loginVerifyOtpDto: LoginVerifyOtpDto): Promise<AccessTokenResponse> {
-    const user = await this.findUserByIdentifierOrThrow(loginVerifyOtpDto.username);
+  async verifyLoginOtp(
+    loginVerifyOtpDto: LoginVerifyOtpDto,
+  ): Promise<AccessTokenResponse> {
+    const user = await this.findUserByIdentifierOrThrow(
+      loginVerifyOtpDto.username,
+    );
 
     await this.otpService.verifyLoginOtp(user.email, loginVerifyOtpDto.otp);
 
     return this.createAccessTokenResponse(user);
   }
 
-  async login(loginDto: LoginDto): Promise<{ accessToken: string; tokenType: 'Bearer'; expiresIn: string }> {
-    const user = await this.validateUserCredentials(loginDto.email, loginDto.password);
+
+  async resendOtp(
+    resendOtpDto: ResendOtpDto,
+  ): Promise<{ message: string; purpose: 'register' | 'login'; email: string; username?: string | null }> {
+    if (resendOtpDto.purpose === 'register') {
+      const email = this.usersService.normalizeEmail(resendOtpDto.email ?? '');
+      const existingUser = await this.usersService.findByEmail(email);
+
+      if (existingUser?.isEmailVerified) {
+        throw new BadRequestException('This email is already verified.');
+      }
+
+      const pendingRegistration = await this.otpService.getPendingRegistration(email);
+
+      if (!pendingRegistration) {
+        throw new BadRequestException('Registration expired. Please register again.');
+      }
+
+      const otp = await this.otpService.resendOtp(email, 'register');
+
+      try {
+        await this.mailService.sendOtpEmail(email, otp);
+      } catch {
+        throw new BadRequestException(
+          'Could not send verification email. Please try again later.',
+        );
+      }
+
+      return {
+        message: 'Mã OTP mới đã được gửi.',
+        purpose: 'register',
+        email,
+        username: pendingRegistration.username,
+      };
+    }
+
+    const identifier = resendOtpDto.username || resendOtpDto.email || '';
+    const user = await this.findUserByIdentifierOrThrow(identifier);
+
+    if (!user.isEmailVerified) {
+      throw new BadRequestException('Email is not verified');
+    }
+
+    const otp = await this.otpService.resendOtp(user.email, 'login');
+
+    try {
+      await this.mailService.sendOtpEmail(user.email, otp);
+    } catch {
+      throw new BadRequestException(
+        'Could not send verification email. Please try again later.',
+      );
+    }
+
+    return {
+      message: 'Mã OTP mới đã được gửi.',
+      purpose: 'login',
+      email: user.email,
+      username: user.username,
+    };
+  }
+
+  async login(
+    loginDto: LoginDto,
+  ): Promise<{ accessToken: string; tokenType: 'Bearer'; expiresIn: string }> {
+    const user = await this.validateUserCredentials(
+      loginDto.email,
+      loginDto.password,
+    );
 
     return {
       accessToken: this.signAccessToken(user),
@@ -123,7 +212,10 @@ export class AuthService {
     };
   }
 
-  private async assertRegistrationAvailable(username: string, email: string): Promise<void> {
+  private async assertRegistrationAvailable(
+    username: string,
+    email: string,
+  ): Promise<void> {
     const existingEmail = await this.usersService.findByEmail(email);
 
     if (existingEmail) {
@@ -131,7 +223,9 @@ export class AuthService {
         throw new ConflictException('Email is already registered');
       }
 
-      throw new ConflictException('Email has an unverified registration from the previous flow. Remove it in development or use a different email.');
+      throw new ConflictException(
+        'Email has an unverified registration from the previous flow. Remove it in development or use a different email.',
+      );
     }
 
     const existingUsername = await this.usersService.findByUsername(username);
@@ -141,11 +235,16 @@ export class AuthService {
         throw new ConflictException('Username is already registered');
       }
 
-      throw new ConflictException('Username has an unverified registration from the previous flow. Remove it in development or use a different username.');
+      throw new ConflictException(
+        'Username has an unverified registration from the previous flow. Remove it in development or use a different username.',
+      );
     }
   }
 
-  private async validateUserCredentials(identifier: string, password: string): Promise<User> {
+  private async validateUserCredentials(
+    identifier: string,
+    password: string,
+  ): Promise<User> {
     const user = await this.findUserByIdentifierOrThrow(identifier);
 
     if (!(await this.verifyPassword(password, user.passwordHash))) {
@@ -176,7 +275,10 @@ export class AuthService {
     return `scrypt$${salt}$${derivedKey.toString('hex')}`;
   }
 
-  private async verifyPassword(password: string, passwordHash: string): Promise<boolean> {
+  private async verifyPassword(
+    password: string,
+    passwordHash: string,
+  ): Promise<boolean> {
     const [algorithm, salt, key] = passwordHash.split('$');
 
     if (algorithm !== 'scrypt' || !salt || !key) {
@@ -184,9 +286,16 @@ export class AuthService {
     }
 
     const savedKey = Buffer.from(key, 'hex');
-    const derivedKey = (await scrypt(password, salt, savedKey.length)) as Buffer;
+    const derivedKey = (await scrypt(
+      password,
+      salt,
+      savedKey.length,
+    )) as Buffer;
 
-    return savedKey.length === derivedKey.length && timingSafeEqual(savedKey, derivedKey);
+    return (
+      savedKey.length === derivedKey.length &&
+      timingSafeEqual(savedKey, derivedKey)
+    );
   }
 
   private createAccessTokenResponse(user: User): AccessTokenResponse {
@@ -209,8 +318,13 @@ export class AuthService {
       email: user.email,
     };
 
-    return jwt.sign(payload, secret, {
-      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN', '1d'),
-    });
+    const signOptions: SignOptions = {
+      expiresIn: this.configService.get<string>(
+        'JWT_EXPIRES_IN',
+        '1d',
+      ) as SignOptions['expiresIn'],
+    };
+
+    return jwt.sign(payload, secret, signOptions);
   }
 }

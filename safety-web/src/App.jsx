@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, LockKeyhole, LogOut, Mail, ShieldCheck, UserRound } from 'lucide-react';
-import { apiPost } from './api.js';
+import { apiGet, apiPost } from './api.js';
+import React from 'react';
 
 const routes = new Set(['/register', '/verify-otp', '/login', '/login-otp', '/dashboard']);
+const OTP_LOCKED_MESSAGE = 'Bạn nhập sai quá nhiều lần, vui lòng đăng nhập lại.';
+const GENERIC_RATE_LIMIT_MESSAGE = 'Bạn thao tác quá nhiều lần. Vui lòng chờ một chút rồi thử lại.';
 
 function navigate(path) {
   window.history.pushState({}, '', path);
@@ -29,11 +32,27 @@ function getFriendlyError(error, fallback) {
   const message = error instanceof Error ? error.message : fallback;
   const lower = message.toLowerCase();
 
+  if (lower.includes('throttlerexception') || lower.includes('too many requests')) {
+    return GENERIC_RATE_LIMIT_MESSAGE;
+  }
+
+  if (message === OTP_LOCKED_MESSAGE) {
+    return message;
+  }
+
+  if (lower.includes('vui lòng chờ trước khi yêu cầu mã otp mới')) {
+    return message;
+  }
+
+  if (lower.includes('yêu cầu gửi lại mã quá nhiều lần')) {
+    return message;
+  }
+
   if (lower.includes('invalid username') || lower.includes('invalid identifier') || lower.includes('unauthorized')) {
     return 'Username or password is incorrect.';
   }
 
-  if (lower.includes('invalid or expired otp') || lower.includes('otp')) {
+  if (lower.includes('invalid or expired otp') || lower.includes('otp must be') || lower.includes('otp')) {
     return 'OTP is invalid or expired.';
   }
 
@@ -52,13 +71,18 @@ function getFriendlyError(error, fallback) {
   return message || fallback;
 }
 
-function Field({ icon: Icon, label, ...props }) {
+function getRetryAfterSeconds(error, fallback = 60) {
+  const retryAfter = Number(error?.retryAfterSeconds);
+  return Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : fallback;
+}
+
+function Field({ icon: Icon, label, disabled, ...props }) {
   return (
     <label className="field">
       <span>{label}</span>
       <div className="inputWrap">
         <Icon aria-hidden="true" size={18} />
-        <input {...props} />
+        <input disabled={disabled} {...props} />
       </div>
     </label>
   );
@@ -85,6 +109,25 @@ function Shell({ eyebrow, title, subtitle, children, aside }) {
 function Message({ error, success }) {
   if (!error && !success) return null;
   return <div className={error ? 'message error' : 'message success'}>{error || success}</div>;
+}
+
+function ResendOtpControl({ disabled, cooldownSeconds, loading, onResend }) {
+  const isCoolingDown = cooldownSeconds > 0;
+
+  return (
+    <button
+      className="secondaryButton compactButton"
+      type="button"
+      disabled={disabled || loading || isCoolingDown}
+      onClick={onResend}
+    >
+      {loading
+        ? 'Đang gửi...'
+        : isCoolingDown
+          ? `Gửi lại mã (${cooldownSeconds}s)`
+          : 'Gửi lại mã'}
+    </button>
+  );
 }
 
 function RegisterPage() {
@@ -141,15 +184,35 @@ function VerifyOtpPage() {
   const email = useMemo(() => sessionStorage.getItem('safety_register_email'), []);
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     if (!email) navigate('/register');
   }, [email]);
 
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return undefined;
+    const timer = window.setInterval(() => {
+      setCooldownSeconds((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldownSeconds]);
+
+  function handleLocked() {
+    setLocked(true);
+    setOtp('');
+    sessionStorage.removeItem('safety_register_email');
+    window.setTimeout(() => navigate('/register'), 2500);
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setError('');
+    setSuccess('');
     setLoading(true);
 
     try {
@@ -158,18 +221,45 @@ function VerifyOtpPage() {
       sessionStorage.removeItem('safety_register_email');
       navigate('/dashboard');
     } catch (err) {
-      setError(getFriendlyError(err, 'OTP is invalid or expired.'));
+      const message = getFriendlyError(err, 'OTP is invalid or expired.');
+      setError(message);
+      if (message === OTP_LOCKED_MESSAGE) handleLocked();
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    setError('');
+    setSuccess('');
+    setResendLoading(true);
+
+    try {
+      await apiPost('/auth/resend-otp', { purpose: 'register', email }, 'Could not resend OTP.');
+      setOtp('');
+      setSuccess('Mã OTP mới đã được gửi.');
+      setCooldownSeconds(60);
+    } catch (err) {
+      const retryAfter = getRetryAfterSeconds(err, 60);
+      const message = getFriendlyError(err, 'Could not resend OTP.');
+      if (err?.status === 429 && message.includes('Vui lòng chờ')) {
+        setCooldownSeconds(retryAfter);
+        setError(`Vui lòng chờ ${retryAfter}s trước khi gửi lại mã.`);
+      } else {
+        setError(message);
+      }
+    } finally {
+      setResendLoading(false);
     }
   }
 
   return (
     <Shell eyebrow="Verification" title="Check your email" subtitle="We sent a verification code to your email.">
       <form onSubmit={handleSubmit} className="formStack">
-        <Field icon={ShieldCheck} label="6-digit OTP" inputMode="numeric" maxLength="6" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} />
-        <Message error={error} />
-        <button className="primaryButton" type="submit" disabled={otp.length !== 6 || loading}>{loading ? 'Verifying...' : 'Verify'}</button>
+        <Field icon={ShieldCheck} label="6-digit OTP" inputMode="numeric" maxLength="6" value={otp} disabled={locked} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} />
+        <Message error={error} success={success} />
+        <button className="primaryButton" type="submit" disabled={otp.length !== 6 || loading || locked}>{loading ? 'Verifying...' : 'Verify'}</button>
+        <ResendOtpControl disabled={locked} cooldownSeconds={cooldownSeconds} loading={resendLoading} onResend={handleResend} />
       </form>
     </Shell>
   );
@@ -224,15 +314,35 @@ function LoginOtpPage() {
   const username = useMemo(() => sessionStorage.getItem('safety_login_username'), []);
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     if (!username) navigate('/login');
   }, [username]);
 
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return undefined;
+    const timer = window.setInterval(() => {
+      setCooldownSeconds((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldownSeconds]);
+
+  function handleLocked() {
+    setLocked(true);
+    setOtp('');
+    sessionStorage.removeItem('safety_login_username');
+    window.setTimeout(() => navigate('/login'), 2500);
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setError('');
+    setSuccess('');
     setLoading(true);
 
     try {
@@ -241,33 +351,107 @@ function LoginOtpPage() {
       sessionStorage.removeItem('safety_login_username');
       navigate('/dashboard');
     } catch (err) {
-      setError(getFriendlyError(err, 'OTP is invalid or expired.'));
+      const message = getFriendlyError(err, 'OTP is invalid or expired.');
+      setError(message);
+      if (message === OTP_LOCKED_MESSAGE) handleLocked();
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    setError('');
+    setSuccess('');
+    setResendLoading(true);
+
+    try {
+      await apiPost('/auth/resend-otp', { purpose: 'login', username }, 'Could not resend OTP.');
+      setOtp('');
+      setSuccess('Mã OTP mới đã được gửi.');
+      setCooldownSeconds(60);
+    } catch (err) {
+      const retryAfter = getRetryAfterSeconds(err, 60);
+      const message = getFriendlyError(err, 'Could not resend OTP.');
+      if (err?.status === 429 && message.includes('Vui lòng chờ')) {
+        setCooldownSeconds(retryAfter);
+        setError(`Vui lòng chờ ${retryAfter}s trước khi gửi lại mã.`);
+      } else {
+        setError(message);
+      }
+    } finally {
+      setResendLoading(false);
     }
   }
 
   return (
     <Shell eyebrow="Login verification" title="Enter your code" subtitle="We sent a verification code to the email linked with your Safety account.">
       <form onSubmit={handleSubmit} className="formStack">
-        <Field icon={ShieldCheck} label="6-digit OTP" inputMode="numeric" maxLength="6" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} />
-        <Message error={error} />
-        <button className="primaryButton" type="submit" disabled={otp.length !== 6 || loading}>{loading ? 'Verifying...' : 'Verify'}</button>
+        <Field icon={ShieldCheck} label="6-digit OTP" inputMode="numeric" maxLength="6" value={otp} disabled={locked} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} />
+        <Message error={error} success={success} />
+        <button className="primaryButton" type="submit" disabled={otp.length !== 6 || loading || locked}>{loading ? 'Verifying...' : 'Verify'}</button>
+        <ResendOtpControl disabled={locked} cooldownSeconds={cooldownSeconds} loading={resendLoading} onResend={handleResend} />
       </form>
     </Shell>
   );
 }
 
 function DashboardPage() {
-  const hasToken = Boolean(localStorage.getItem('safety_access_token'));
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!hasToken) navigate('/login');
-  }, [hasToken]);
+    let isMounted = true;
+    const token = localStorage.getItem('safety_access_token');
+
+    if (!token) {
+      navigate('/login');
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    async function validateSession() {
+      try {
+        const currentUser = await apiGet(
+          '/auth/me',
+          { Authorization: `Bearer ${token}` },
+          'Session validation failed.',
+        );
+
+        if (isMounted) {
+          setUser(currentUser);
+          setLoading(false);
+        }
+      } catch {
+        localStorage.removeItem('safety_access_token');
+        if (isMounted) navigate('/login');
+      }
+    }
+
+    validateSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   function logout() {
     localStorage.removeItem('safety_access_token');
     navigate('/login');
+  }
+
+  if (loading) {
+    return (
+      <Shell eyebrow="Checking session" title="Safety dashboard" subtitle="Validating your session.">
+        <div className="successPanel">
+          <ShieldCheck size={38} />
+          <div>
+            <strong>Validating session</strong>
+            <p>Please wait while Safety checks your access token.</p>
+          </div>
+        </div>
+      </Shell>
+    );
   }
 
   return (
@@ -276,7 +460,7 @@ function DashboardPage() {
         <CheckCircle2 size={38} />
         <div>
           <strong>Authentication complete</strong>
-          <p>Your Safety session is active on this browser.</p>
+          <p>{user?.username ? `${user.username}'s Safety session is active.` : 'Your Safety session is active on this browser.'}</p>
         </div>
       </div>
       <button className="secondaryButton" type="button" onClick={logout}>

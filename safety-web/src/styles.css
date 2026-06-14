@@ -165,6 +165,16 @@ h1 {
   background: #e9eef5;
 }
 
+.compactButton {
+  margin-top: 0;
+  min-height: 44px;
+}
+
+.inputWrap input:disabled {
+  color: #64748b;
+  cursor: not-allowed;
+}
+
 .message {
   border-radius: 8px;
   padding: 12px 13px;

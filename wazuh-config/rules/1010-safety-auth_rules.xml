@@ -1,0 +1,232 @@
+<!-- Safety Auth authentication audit rules. Rule IDs 100500-100599 are reserved for this project. -->
+<group name="safety_auth,authentication,">
+  <rule id="100500" level="0">
+    <field name="source">^safety-auth$</field>
+    <field name="category">^authentication$</field>
+    <description>Safety Auth authentication audit event</description>
+    <options>no_full_log</options>
+  </rule>
+
+  <rule id="100510" level="7">
+    <if_sid>100500</if_sid>
+    <field name="event">^auth.login.password.failed$</field>
+    <description>Safety Auth password login failed</description>
+    <group>authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
+
+  <rule id="100511" level="10" frequency="5" timeframe="300">
+    <if_matched_sid>100510</if_matched_sid>
+    <same_field>ip</same_field>
+    <description>Multiple Safety Auth password login failures from same IP</description>
+    <group>authentication_failures,bruteforce,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
+
+  <rule id="100520" level="8">
+    <if_sid>100500</if_sid>
+    <field name="event">^auth.otp.verify.failed$</field>
+    <description>Safety Auth OTP verification failed</description>
+    <group>authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
+
+  <rule id="100521" level="11" frequency="5" timeframe="300">
+    <if_matched_sid>100520</if_matched_sid>
+    <same_field>ip</same_field>
+    <description>Multiple Safety Auth OTP failures from same IP</description>
+    <group>authentication_failures,bruteforce,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
+
+  <rule id="100522" level="11" frequency="5" timeframe="300">
+    <if_matched_sid>100520</if_matched_sid>
+    <same_field>username</same_field>
+    <description>Multiple Safety Auth OTP failures for same username</description>
+    <group>authentication_failures,bruteforce,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
+
+  <rule id="100530" level="10">
+    <if_sid>100500</if_sid>
+    <field name="event">^auth.rate_limit.exceeded$</field>
+    <description>Safety Auth rate limit exceeded</description>
+    <group>rate_limit,authentication_failed,</group>
+  </rule>
+
+  <rule id="100531" level="12" frequency="3" timeframe="300">
+    <if_matched_sid>100530</if_matched_sid>
+    <same_field>ip</same_field>
+    <description>Repeated Safety Auth rate limit events from same IP</description>
+    <group>rate_limit,authentication_failures,bruteforce,</group>
+  </rule>
+
+  <rule id="100540" level="9">
+    <if_sid>100500</if_sid>
+    <field name="event">^auth.legacy_login.blocked$</field>
+    <description>Safety Auth legacy password-only login endpoint was blocked</description>
+    <group>attack,authentication_failed,</group>
+  </rule>
+
+  <rule id="100550" level="6">
+    <if_sid>100500</if_sid>
+    <field name="event">^auth.me.failed$</field>
+    <description>Safety Auth JWT validation failed</description>
+    <group>authentication_failed,</group>
+  </rule>
+
+  <rule id="100560" level="3">
+    <if_sid>100500</if_sid>
+    <field name="event">^auth.login.password.success$</field>
+    <description>Safety Auth password step succeeded and OTP was sent</description>
+    <group>authentication_success,</group>
+  </rule>
+
+  <rule id="100570" level="3">
+    <if_sid>100500</if_sid>
+    <field name="event">^auth.otp.verify.success$</field>
+    <description>Safety Auth OTP verification succeeded</description>
+    <group>authentication_success,</group>
+  </rule>
+
+
+  <rule id="100590" level="3">
+    <if_sid>100500</if_sid>
+    <field name="event">^auth.otp.resend.success$</field>
+    <description>Safety Auth OTP resend succeeded</description>
+    <group>authentication_success,otp_resend,</group>
+  </rule>
+
+  <rule id="100591" level="6">
+    <if_sid>100500</if_sid>
+    <field name="event">^auth.otp.resend.failed$</field>
+    <description>Safety Auth OTP resend failed</description>
+    <group>authentication_failed,otp_resend,</group>
+  </rule>
+
+  <rule id="100592" level="9">
+    <if_sid>100500</if_sid>
+    <field name="event">^auth.otp.resend.blocked$</field>
+    <description>Safety Auth OTP resend was blocked</description>
+    <group>authentication_failed,otp_resend,rate_limit,</group>
+  </rule>
+
+  <rule id="100593" level="7">
+    <if_sid>100500</if_sid>
+    <field name="event">^auth.otp.attempt.failed$</field>
+    <description>Safety Auth OTP attempt failed</description>
+    <group>authentication_failed,otp_attempt,</group>
+  </rule>
+
+  <rule id="100594" level="10">
+    <if_sid>100500</if_sid>
+    <field name="event">^auth.otp.locked$</field>
+    <description>Safety Auth OTP flow locked after too many failed attempts</description>
+    <group>authentication_failed,otp_locked,bruteforce,</group>
+  </rule>
+
+  <!-- Docker json-file wrapper branch: Wazuh JSON decoder stores the inner Safety Auth JSON in field "log". -->
+  <rule id="100501" level="0">
+    <field name="log">safety-auth</field>
+    <description>Safety Auth authentication audit event from Docker log wrapper</description>
+    <options>no_full_log</options>
+  </rule>
+
+  <rule id="100580" level="7">
+    <if_sid>100501</if_sid>
+    <field name="log">auth.login.password.failed</field>
+    <description>Safety Auth password login failed</description>
+    <group>authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
+
+  <rule id="100581" level="10" frequency="5" timeframe="300">
+    <if_matched_sid>100580</if_matched_sid>
+    <description>Multiple Safety Auth password login failures from Docker logs</description>
+    <group>authentication_failures,bruteforce,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
+
+  <rule id="100582" level="8">
+    <if_sid>100501</if_sid>
+    <field name="log">auth.otp.verify.failed</field>
+    <description>Safety Auth OTP verification failed</description>
+    <group>authentication_failed,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
+
+  <rule id="100583" level="11" frequency="5" timeframe="300">
+    <if_matched_sid>100582</if_matched_sid>
+    <description>Multiple Safety Auth OTP failures from Docker logs</description>
+    <group>authentication_failures,bruteforce,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
+
+  <rule id="100584" level="10">
+    <if_sid>100501</if_sid>
+    <field name="log">auth.rate_limit.exceeded</field>
+    <description>Safety Auth rate limit exceeded</description>
+    <group>rate_limit,authentication_failed,</group>
+  </rule>
+
+  <rule id="100585" level="12" frequency="3" timeframe="300">
+    <if_matched_sid>100584</if_matched_sid>
+    <description>Repeated Safety Auth rate limit events from Docker logs</description>
+    <group>rate_limit,authentication_failures,bruteforce,</group>
+  </rule>
+
+  <rule id="100586" level="9">
+    <if_sid>100501</if_sid>
+    <field name="log">auth.legacy_login.blocked</field>
+    <description>Safety Auth legacy password-only login endpoint was blocked</description>
+    <group>attack,authentication_failed,</group>
+  </rule>
+
+  <rule id="100587" level="6">
+    <if_sid>100501</if_sid>
+    <field name="log">auth.me.failed</field>
+    <description>Safety Auth JWT validation failed</description>
+    <group>authentication_failed,</group>
+  </rule>
+
+  <rule id="100588" level="3">
+    <if_sid>100501</if_sid>
+    <field name="log">auth.login.password.success</field>
+    <description>Safety Auth password step succeeded and OTP was sent</description>
+    <group>authentication_success,</group>
+  </rule>
+
+  <rule id="100589" level="3">
+    <if_sid>100501</if_sid>
+    <field name="log">auth.otp.verify.success</field>
+    <description>Safety Auth OTP verification succeeded</description>
+    <group>authentication_success,</group>
+  </rule>
+
+  <rule id="100595" level="3">
+    <if_sid>100501</if_sid>
+    <field name="log">auth.otp.resend.success</field>
+    <description>Safety Auth OTP resend succeeded</description>
+    <group>authentication_success,otp_resend,</group>
+  </rule>
+
+  <rule id="100596" level="6">
+    <if_sid>100501</if_sid>
+    <field name="log">auth.otp.resend.failed</field>
+    <description>Safety Auth OTP resend failed</description>
+    <group>authentication_failed,otp_resend,</group>
+  </rule>
+
+  <rule id="100597" level="9">
+    <if_sid>100501</if_sid>
+    <field name="log">auth.otp.resend.blocked</field>
+    <description>Safety Auth OTP resend was blocked</description>
+    <group>authentication_failed,otp_resend,rate_limit,</group>
+  </rule>
+
+  <rule id="100598" level="7">
+    <if_sid>100501</if_sid>
+    <field name="log">auth.otp.attempt.failed</field>
+    <description>Safety Auth OTP attempt failed</description>
+    <group>authentication_failed,otp_attempt,</group>
+  </rule>
+
+  <rule id="100599" level="10">
+    <if_sid>100501</if_sid>
+    <field name="log">auth.otp.locked</field>
+    <description>Safety Auth OTP flow locked after too many failed attempts</description>
+    <group>authentication_failed,otp_locked,bruteforce,</group>
+  </rule>
+
+</group>
