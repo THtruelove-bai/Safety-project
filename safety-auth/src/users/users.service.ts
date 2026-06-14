@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
@@ -10,7 +14,12 @@ export class UsersService {
     private readonly usersRepository: Repository<User>,
   ) {}
 
-  async create(username: string, email: string, passwordHash: string, isEmailVerified = false): Promise<User> {
+  async create(
+    username: string,
+    email: string,
+    passwordHash: string,
+    isEmailVerified = false,
+  ): Promise<User> {
     const normalizedUsername = this.normalizeUsername(username);
     const normalizedEmail = this.normalizeEmail(email);
     const existingEmail = await this.findByEmail(normalizedEmail);
@@ -35,7 +44,11 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  createVerified(username: string, email: string, passwordHash: string): Promise<User> {
+  createVerified(
+    username: string,
+    email: string,
+    passwordHash: string,
+  ): Promise<User> {
     return this.create(username, email, passwordHash, true);
   }
 
@@ -48,6 +61,12 @@ export class UsersService {
   async findByUsername(username: string): Promise<User | null> {
     return this.usersRepository.findOne({
       where: { username: this.normalizeUsername(username) },
+    });
+  }
+
+  async findById(id: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { id },
     });
   }
 

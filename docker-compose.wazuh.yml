@@ -1,0 +1,62 @@
+# Safety Auth Wazuh overlay for dev/lab integration.
+# Use with: docker compose -f wazuh-docker/single-node/docker-compose.yml -f docker-compose.wazuh.yml up -d
+services:
+  wazuh.manager:
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          /var/ossec/bin/wazuh-control status 2>/dev/null | grep -q 'wazuh-remoted is running' &&
+          /var/ossec/bin/wazuh-control status 2>/dev/null | grep -q 'wazuh-authd is running' &&
+          /var/ossec/bin/wazuh-control status 2>/dev/null | grep -q 'wazuh-analysisd is running' &&
+          grep -q ':05EA .* 0A ' /proc/net/tcp &&
+          grep -q ':05EB .* 0A ' /proc/net/tcp
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+    volumes:
+      - ../../wazuh-config/decoders/0510-safety-auth_decoders.xml:/var/ossec/etc/decoders/0510-safety-auth_decoders.xml:ro
+      - ../../wazuh-config/rules/1010-safety-auth_rules.xml:/var/ossec/etc/rules/1010-safety-auth_rules.xml:ro
+
+  wazuh.safety-auth-log-tailer:
+    image: wazuh/wazuh-agent:4.14.0
+    hostname: safety-auth-log-tailer
+    restart: unless-stopped
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        mkdir -p /logs && touch /logs/docker-containers.log;
+        while true; do
+          files=$$(find /docker/containers -type f -name '*-json.log' 2>/dev/null);
+          if [ -n "$$files" ]; then
+            tail -n0 -F $$files >> /logs/docker-containers.log & pid=$$!;
+            sleep 30;
+            kill "$$pid" 2>/dev/null;
+            wait "$$pid" 2>/dev/null;
+          else
+            sleep 5;
+          fi;
+        done
+    volumes:
+      - /var/lib/docker/containers:/docker/containers:ro
+      - safety-auth-docker-logs:/logs
+
+  wazuh.agent.safety-auth:
+    image: wazuh/wazuh-agent:4.14.0
+    hostname: safety-auth-docker-agent
+    restart: unless-stopped
+    depends_on:
+      wazuh.manager:
+        condition: service_healthy
+      wazuh.safety-auth-log-tailer:
+        condition: service_started
+    volumes:
+      - safety-auth-agent-etc:/var/ossec/etc
+      - ../../wazuh-config/agent/ossec.conf:/wazuh-config-mount/etc/ossec.conf:ro
+      - safety-auth-docker-logs:/var/log/safety-auth-docker:ro
+
+volumes:
+  safety-auth-docker-logs:
+  safety-auth-agent-etc:
