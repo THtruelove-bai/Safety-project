@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, LockKeyhole, LogOut, Mail, ShieldCheck, UserRound } from 'lucide-react';
 import { apiGet, apiPost } from './api.js';
+import React from 'react';
 
 const routes = new Set(['/register', '/verify-otp', '/login', '/login-otp', '/dashboard']);
 const OTP_LOCKED_MESSAGE = 'Bạn nhập sai quá nhiều lần, vui lòng đăng nhập lại.';
