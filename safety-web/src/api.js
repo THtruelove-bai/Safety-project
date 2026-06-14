@@ -1,4 +1,10 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL && import.meta.env.PROD) {
+  throw new Error('VITE_API_BASE_URL is required in production');
+}
+
+const BASE_URL = API_BASE_URL || 'http://localhost:3000';
 
 const GENERIC_RATE_LIMIT_MESSAGE = 'Bạn thao tác quá nhiều lần. Vui lòng chờ một chút rồi thử lại.';
 
@@ -66,7 +72,7 @@ async function parseResponse(response, fallbackError) {
 }
 
 export async function apiGet(path, headers = {}, fallbackError = 'Request failed') {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${BASE_URL}${path}`, {
     method: 'GET',
     headers,
   });
@@ -75,7 +81,7 @@ export async function apiGet(path, headers = {}, fallbackError = 'Request failed
 }
 
 export async function apiPost(path, payload, fallbackError = 'Request failed') {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
