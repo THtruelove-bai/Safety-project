@@ -115,7 +115,14 @@ export class AuthService {
     );
     const otp = await this.otpService.createLoginOtp(user.email);
 
-    await this.mailService.sendOtpEmail(user.email, otp);
+    try {
+      await this.mailService.sendOtpEmail(user.email, otp);
+    } catch {
+      await this.otpService.deleteLoginOtp(user.email);
+      throw new BadRequestException(
+        'Could not send verification email. Please try again later.',
+      );
+    }
 
     return {
       message: 'Login OTP sent to the registered email.',

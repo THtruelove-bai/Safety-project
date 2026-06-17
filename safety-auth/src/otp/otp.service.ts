@@ -74,6 +74,10 @@ export class OtpService implements OnModuleInit, OnModuleDestroy {
     return this.createOtp(email, 'login', true);
   }
 
+  async deleteLoginOtp(email: string): Promise<void> {
+    await this.client.del(this.getOtpKey(email, 'login'));
+  }
+
   verifyLoginOtp(email: string, otp: string): Promise<void> {
     return this.verifyOtp(email, otp, 'login');
   }

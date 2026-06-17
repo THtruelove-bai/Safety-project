@@ -52,8 +52,12 @@ function getFriendlyError(error, fallback) {
     return 'Username or password is incorrect.';
   }
 
-  if (lower.includes('invalid or expired otp') || lower.includes('otp must be') || lower.includes('otp')) {
+  if (lower.includes('invalid or expired otp') || lower.includes('otp must be')) {
     return 'OTP is invalid or expired.';
+  }
+
+  if (lower.includes('could not send verification email') || lower.includes('could not request login otp')) {
+    return 'Could not send login code. Please try again later.';
   }
 
   if (lower.includes('email is already registered')) {
@@ -270,6 +274,10 @@ function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    sessionStorage.removeItem('safety_login_username');
+  }, []);
+
   const canSubmit = form.username.trim() && form.password && !loading;
 
   async function handleSubmit(event) {
@@ -279,7 +287,7 @@ function LoginPage() {
 
     try {
       const payload = { username: form.username.trim(), password: form.password };
-      await apiPost('/auth/login/request-otp', payload, 'Could not request login OTP.');
+      await apiPost('/auth/login/request-otp', payload, 'Could not send login code. Please try again later.');
       sessionStorage.setItem('safety_login_username', payload.username);
       navigate('/login-otp');
     } catch (err) {
