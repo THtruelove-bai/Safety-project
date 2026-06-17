@@ -2,6 +2,11 @@
 
 This guide wires Safety Auth authentication audit logs into Wazuh for dev/lab detection.
 
+> Remote Kali architecture: for Ubuntu/EC2 app server plus Kali Wazuh server,
+> use `docs/WAZUH_REMOTE_KALI_SETUP.md`, `docker-compose.kali-wazuh.yml`, and
+> `wazuh-config/agent/ossec.remote-agent.conf`. Do not run full Wazuh
+> Manager/Indexer/Dashboard on a weak EC2 app server.
+
 ## Architecture
 
 ```text
